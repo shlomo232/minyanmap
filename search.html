@@ -1,0 +1,182 @@
+<html><!--
+Todo:
+- Add day functionality to getshulinfo.php (already in getforcity.php, makelegend.php)
+- Make sidebar scroll if too long, rather than expanding window (http://jsfiddle.net/Pw7ba/)
+- mysql_real_escape_string to prevent sql injection http://stackoverflow.com/questions/60174/best-way-to-stop-sql-injection-in-php
+- Add zmanim (at least, a link to myzmanim site for given lat,long) - to bottom of legend
+- Add "suggest correction" link to infowindow, "suggest addition" to about window
+- some sort of display for places that do not yet have relevant information. perhaps, in shacharit/maariv menu, add option "meida al beit kneset". top line: hapes [shaharit] beyom [hayom] beir [___].
+- Put check marks by each legend entry, with all minyans for a shul automatically switched on/off when you click one of them. (Should this survive map resizing?)
+-->
+
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+<title>Minyan Search Engine</title>
+<script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?sensor=false&language=he">
+<script type="text/javascript" src="scripts/label.js"></script>
+<script type="text/javascript" src="scripts/biglabel.js"></script>
+<script type="text/javascript" src="scripts/zmanim.js"></script>
+<script type="text/javascript">// <!-- 
+var map;
+var markers = [];
+infowindow = new google.maps.InfoWindow();
+
+function resize(){
+    var newheight=document.body.clientHeight-100;
+    document.getElementById("legend").style.height=newheight+"px" //(window.screen.height-40)+"px";
+}
+
+function correctDay(day) {
+    if (day==9) { // 9="today"
+        d=new Date();
+        return d.getDay()+1; //+1 to go from 0-6 (PHP) to 1-7 (my database)
+    } else return day;
+}
+
+function getCity() {
+    var activecity=document.getElementById('city').value;
+    if (activecity.length==0) { return; }
+    var prayer=document.getElementById('prayer').value;
+    var day=correctDay(document.getElementById('day').value);
+
+    if (window.XMLHttpRequest) { xmlhttp=new XMLHttpRequest(); }// modern browsers
+    else { xmlhttp=new ActiveXObject("Microsoft.XMLHTTP"); }// IE 5,6
+    xmlhttp.onreadystatechange=function() {
+        if (xmlhttp.readyState==4 && xmlhttp.status==200) { eval(xmlhttp.responseText); } }
+    xmlhttp.open("GET","getforcity.php?city="+activecity+"&prayer="+prayer+"&day="+day,true);
+    xmlhttp.send();
+    makeZmanim();
+ //   makeLegend(); // for some reason this command causes errors. instead, getforcity.php forces a change in boundaries so the bounds_changed listener always calls makeLegend()
+}
+
+function strcmp(str1,str2) {
+      return ((str1 == str2) ? 0 : ((str1 > str2) ? 1 : -1));
+}
+
+function makeZmanim() {
+    function timedisplay(time) { // hours:minutes
+        if (time%1<.166666666666) return (Math.floor(time)+":0"+Math.round((time%1)*60));
+        else return (Math.floor(time)+":"+Math.floor((time%1)*60));
+    }
+    d=new Date();
+    yr=d.getFullYear();
+    mn=d.getMonth()+1; // javascript months are 0-11
+    dy=d.getDate();
+    tz=d.getTimezoneOffset()/-60.0; // convert to hours in correct direction
+    srise=24*sunrise(31.762691,35.217147,yr,mn,dy,tz,0);
+    snoon=24*solarnoon(31.762691,35.217147,yr,mn,dy,tz,0);
+    sset=24*sunset(31.762691,35.217147,yr,mn,dy,2,0);
+    zmanText = "";
+    zmanText = zmanText + "<br>עלות השחר: " + timedisplay(24*dawn(31.762691,35.217147,yr,mn,dy,tz,0,16.1));
+    zmanText = zmanText + "<br>ציצית ותפילין: " + timedisplay(24*dawn(31.762691,35.217147,yr,mn,dy,tz,0,10.2));
+    zmanText = zmanText + "<br>זריחה: " + timedisplay(srise);
+    zmanText = zmanText + "<br>סוף זמן ק\"ש: " + timedisplay(srise+(snoon-srise)/2);
+    zmanText = zmanText + "<br>סוף זמן תפילה: " + timedisplay(srise+2*(snoon-srise)/3);
+    zmanText = zmanText + "<br>חצות: " + timedisplay(snoon);
+    zmanText = zmanText + "<br>מנחה גדולה: " + timedisplay(Math.max(snoon+0.5,snoon+0.5*(sset-snoon)/6));
+    zmanText = zmanText + "<br>פלג המנחה: " + timedisplay(snoon+4.75*(sset-snoon)/6);
+    zmanText = zmanText + "<br>שקיעה: " + timedisplay(sset);
+    zmanText = zmanText + "<br>צאת הכוכבים: " + timedisplay(24*dusk(31.762691,35.217147,yr,mn,dy,2,0,5.2932));
+//    zmanText = zmanText + "<br>צאת: " + timedisplay(24*dusk(31.762691,35.217147,yr,mn,dy,2,0,8.497765));
+    document.getElementById("zmanim").innerHTML=zmanText;
+ }
+
+function makeLegend() {
+    var activecity=document.getElementById('city').value;
+    if (activecity.length==0) { return; }
+    var prayer=document.getElementById('prayer').value;
+    var day=correctDay(document.getElementById('day').value);
+
+    var aa; //temp
+    minlat=map.getBounds().getSouthWest().lat();
+    maxlat=map.getBounds().getNorthEast().lat();
+    minlon=map.getBounds().getSouthWest().lng();
+    maxlon=map.getBounds().getNorthEast().lng();
+    if (minlon>maxlon) {aa=minlon; minlon=maxlon; maxlon=aa;} // international date line
+
+//    if ( (maxlon-minlon>.3) || (maxlat-minlat>.3) ) { return; } // do not request from overly large area (1deg~100km)
+
+    var legendArray = [];
+    var xx="";
+    for (var i=0; markers.length>i; i++) {
+        if  ((markers[i].position.lat() > minlat) && (markers[i].position.lat() < maxlat) && // Ya=lat, Za=lon
+             (markers[i].position.lng() > minlon) && (markers[i].position.lng() < maxlon)) {
+                timeArray=markers[i].get('text').split(",");
+                for (var j=0; j<timeArray.length; j++) {
+                    timeArray[j].replace(' ', ''); // remove spaces (for correct sorting)
+                    xx=
+                        timeArray[j]
+                        + " <a href=\"javascript:updateInfowindow(map,markers["+i+"]);\">"
+                        + markers[i].shulname +"</a><br>\n";
+//                    alert(xx);
+                    legendArray.push(xx);
+                }
+        }
+    }
+
+    legendArray.sort(strcmp);
+
+    var legendText="";
+    for (i=0; i<legendArray.length; i++) legendText=legendText+legendArray[i];
+    
+    document.getElementById("legend").innerHTML=legendText;
+
+    resize();
+}
+
+function initialize() {
+    var myOptions = {
+        zoom: 8,
+        center: new google.maps.LatLng(32.0806, 34.814),
+        navigationControlOptions: {style: google.maps.NavigationControlStyle.SMALL},
+        streetViewControl: false,
+        mapTypeId: google.maps.MapTypeId.ROADMAP,    
+//        mapTypeId: google.maps.MapTypeId.HYBRID,    
+        mapTypeControl: false
+    }
+    map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
+    google.maps.event.addListener(map, 'bounds_changed', function() { makeLegend(); });
+}
+
+function displayAbout() {
+    document.getElementById("legend").innerHTML="מידע על האתר";
+}
+// --></script>
+</head>
+<body onload="initialize()" dir=rtl onresize="resize()" style="overflow:hidden;">
+
+<table border=0 width="100%" height="100%" cellpadding=0>
+<tr><td colspan=2>
+    <span style="float:right;">
+    <div id="form_input" dir="rtl"><b>בתי כנסת בעיר:</b>  
+    <input type="text" id="city" value="" onkeypress="if(event.keyCode==13) {getCity();  document.all.map_canvas.focus();}"/>
+    תפילה: 
+    <select id="prayer">
+    <option value="shacharit">שחרית</option>
+    <option value="mincha">מנחה</option>
+    <option value="maariv">מעריב</option>
+    </select>
+    יום:
+    <select id="day">
+    <option value="9">היום</option>
+    <option value="1">א</option>
+    <option value="2">ב</option>
+    <option value="3">ג</option>
+    <option value="4">ד</option>
+    <option value="5">ה</option>
+    <option value="6">ערב שבת</option>
+    <option value="7">יום שבת</option>
+    </select>
+    <input type="button" onclick="getCity();" value="חפש"/></div>
+    </span>
+    <span style="float:left"><a href="javascript:displayAbout()">אודות האתר</a></span>
+</td></tr>
+<tr><td colspan=2 height=1><hr noshade></td></tr>
+<tr>
+    <td width="35%" valign=top><div id="legend" style="width:100%;overflow-y:auto;"></div></td><!--  -->
+    <td rowspan=2 width="65%"><div id="map_canvas" style="width:100%; height:100%"></div></td><!-- Could add OSM overlap, see http://tinyurl.com/googlemaps3osm -->
+</tr>
+<tr>
+    <td bgcolor="#ffff88"><div id="zmanim">fcfdv<br>ff<br>vcv</div></td>
+</tr>
+</table>

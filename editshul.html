@@ -1,0 +1,134 @@
+<html>
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<script type="text/javascript">
+minyancount=0;
+
+function mypause(secs) {
+    var date = new Date();
+    var curDate = null;
+    do { curDate = new Date(); } while(curDate-date < secs*1000);
+}
+
+function addMinyanDisplay(prayer,time,days,editable) {
+// "editable" should be implementable with a find/replace (to insert "readonly") at end of function
+
+    // Display prayer
+    newminyantext = '<p><table border=1 cellpadding=10 cellspacing=1><tr><td><b>Prayer:</b> <select id="prayer_type'+minyancount+'">';
+    newminyantext += '<option value="shacharit">Shacharit</option><option value="mincha">Mincha</option><option value="maariv">Maariv</option><option value="mussaf">Mussaf</option></select>';
+    
+    // Display time
+    // Time format:
+    //   0-2400     Time
+    //   2500+-60   Around Alot hashachar
+    //   2700+-60   Around Hanetz
+    //   2900+-60   Around Shkiah
+    //   3100+-60   Around Tzet
+    //   3300+-60   Around Shabbat in time
+    //   3500+-60   Around Shabbat out time
+    //   >10000     Continuous minyans (8 digits: BBBBEEEE for begin and end)
+    newminyantext += '<p><table><tr><td rowspan=4><b>Begin<br>Time:</b></td><td>';
+    newminyantext += '<input type="radio" name="time_type'+minyancount+'" value="1" checked></td>';
+    newminyantext += '<td>Time: <input id="attime_hours'+minyancount+'" type="text" size=2 value="">:<input id="attime_minutes'+minyancount+'" type="text" size=2 value=""></td></tr><tr><td>';
+    newminyantext += '<tr><td><input type="radio" name="time_type'+minyancount+'" value="2"></td><td><input id="zmanoffset_time'+minyancount+'" type="text" size=2 value=""> minutes ';
+    newminyantext += '<select id="zmanoffset_beforeafter'+minyancount+'"><option value="-1">before</option><option value="1">after</option></select>';
+    newminyantext += '<select id="zmanoffset_zman'+minyancount+'"><option value="hanetz">Hanetz</option><option value="alothashachar">Alot Hashachar</option><option value="shkiah">Shkiah</option><option value="tzet">Tzet hakochavim</option><option value="shabbatbegin">Shabbat begin time</option><option value="shabbatend">Shabbat end time</option></select></td></tr>';
+    newminyantext += '<tr><td><input type="radio" name="time_type'+minyancount+'" value="3"></td><td>Continual minyans from ';
+    newminyantext += '<input id="continual_beginhours'+minyancount+'" size=2 value="">:<input id="continual_beginminutes'+minyancount+'" size=2 value=""> to ';
+    newminyantext += '<input id="continual_endhours'+minyancount+'" size=2 value="">:<input id="continual_endminutes'+minyancount+'" size=2 value=""></td></tr></table>';
+
+    // Display days
+    newminyantext += '<p><b>Day(s): </b>';
+    for (i=1; i<=7; i++) {
+        newminyantext += '<input type="checkbox" name="day'+i+minyancount+'" value="'+i+'"';
+        if (days.indexOf(i)>=0) { newminyantext+='checked'; }
+        newminyantext += '>'+i+' &nbsp;&nbsp;';
+    }
+    newminyantext += '</td></tr></table>';
+
+    // Write everything to display
+    document.getElementById("minyanform").innerHTML += newminyantext;
+
+    // Adjust the HTML we just added
+    document.getElementById("prayer_type"+minyancount).value=prayer;
+
+    if (time<2400) { // Put numbers in first row, if appropriate. 
+        document.getElementsByName("time_type"+minyancount)[0].checked=true;
+        hours=Math.floor(time/100);
+        minutes=(time-hours*100)+'';
+        if (minutes.length<2) { minutes='0'+minutes; }
+        document.getElementById("attime_hours"+minyancount).value=hours;
+        document.getElementById("attime_minutes"+minyancount).value=minutes;
+    }
+    else if ((time>=2400) && (time<3600)) { // Second
+        document.getElementsByName("time_type"+minyancount)[1].checked=true;
+        if      (time>=2400 && time<2600) { document.getElementById("zmanoffset_zman"+minyancount).value='hanetz';        a=time-2500; }
+        else if (time>=2600 && time<2800) { document.getElementById("zmanoffset_zman"+minyancount).value='alothashachar'; a=time-2700; }
+        else if (time>=2800 && time<3000) { document.getElementById("zmanoffset_zman"+minyancount).value='shkiah';        a=time-2900; }
+        else if (time>=3000 && time<3200) { document.getElementById("zmanoffset_zman"+minyancount).value='tzet';          a=time-3100; }
+        else if (time>=3200 && time<3400) { document.getElementById("zmanoffset_zman"+minyancount).value='shabbatbegin';  a=time-3300; }
+        else if (time>=3400 && time<3600) { document.getElementById("zmanoffset_zman"+minyancount).value='shabbatend';    a=time-3500; }
+        if (a<=0) {
+            document.getElementById("zmanoffset_beforeafter"+minyancount).value=-1;
+        } else {
+            document.getElementById("zmanoffset_beforeafter"+minyancount).value=1;
+        }
+        if (a<0) { a=Math.abs(a)-40; } // Display # minutes as absolute value. Subtract 40, because there are 60 not 100 minutes/hour        
+        document.getElementById("zmanoffset_time"+minyancount).value=a;
+    }
+    else { // Third row
+    //   >10000     Continuous minyans (8 digits: BBBBEEEE for begin and end)
+        document.getElementsByName("time_type"+minyancount)[2].checked=true;
+        begintime=Math.floor(time/10000);
+        endtime=time%10000;
+        beginhours=Math.floor(begintime/100);
+        beginminutes=(begintime-beginhours*100)+'';
+        if (beginminutes.length<2) { beginminutes='0'+beginminutes; }
+        endhours=Math.floor(endtime/100);
+        endminutes=(endtime-endhours*100)+'';
+        if (endminutes.length<2) { endminutes='0'+endminutes; }
+        document.getElementById("continual_beginhours"+minyancount).value=beginhours;
+        document.getElementById("continual_beginminutes"+minyancount).value=beginminutes;
+        document.getElementById("continual_endhours"+minyancount).value=endhours;
+        document.getElementById("continual_endminutes"+minyancount).value=endminutes;
+    }
+
+    minyancount++;
+}
+
+function initialize() {
+    if (window.XMLHttpRequest) { xmlhttp=new XMLHttpRequest(); }// modern browsers
+    else { xmlhttp=new ActiveXObject("Microsoft.XMLHTTP"); }// IE 5,6
+    xmlhttp.onreadystatechange=function() {
+        if (xmlhttp.readyState==4 && xmlhttp.status==200) {
+            eval(xmlhttp.responseText);
+        } }
+    xmlhttp.open("GET","getforshul.php?shulid=1",true);
+    xmlhttp.send();
+}
+
+</script>
+
+</head><body onload="initialize()">
+<form action="">
+
+<b>Shul information:</b> 
+<table><tr><td>
+Name:</td><td><input id="shul_name" style="width: 200px" value=""></td></tr><tr><td>
+City:</td><td><input id="shul_city" style="width: 200px" value=""></td></tr><tr><td>
+Neighborhood:</td><td><input id="shul_neighborhood" style="width: 200px" value=""></td></tr><tr><td>
+Address:</td><td><input id="shul_address" style="width: 200px" value="">
+</td></tr></table>
+
+<!-- For a new shul, we can have option of entering either address or lat/lon. 
+If given address, we open an iframe with Google Maps, input address, and get lat/lon from generated link. -->
+
+<?php 
+echo time();
+?>
+
+<p><div id="minyanform"></div>
+
+<p><input type="button" onclick="addMinyanDisplay(1,0,'',1)" value="Add minyan">
+
+</form>
+
