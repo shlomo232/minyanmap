@@ -1,3 +1,11 @@
+SETUP INSTRUCTIONS:
+1) Start server with apache2, php5, mysql, php-mysql
+2) mysql -u root
+3) SET PASSWORD FOR 'root'@'localhost' = PASSWORD('hunter2');
+4) CREATE DATABASE maindb;
+5) sudo mysql -u root -p maindb < db.sql
+
+================
 Needs mysql, php5
 To add users, needs the php5-gd library (Currently, user management is not useful/active)
 Set default_charset=utf8 for PHP
